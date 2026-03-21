@@ -1,0 +1,13 @@
+#msgs-box {
+  width: 100%;
+  height: 400px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+body {
+  padding: 10px;
+  border: 4px solid darkgray;
+  border-radius: 15px;
+  background-color: grey;
+}
