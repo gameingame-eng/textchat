@@ -9,6 +9,7 @@
 #include "color.h"
 #include "httplib.h"
 #include "json.hpp"
+#include <chrono>
 #include <deque>
 #include <map>
 #include <mutex>
@@ -27,6 +28,12 @@ std::map<int, Client> clients;
 std::mutex clients_mutex;
 std::deque<std::string> message_history;
 constexpr size_t MAX_HISTORY = 256;
+
+long long current_timestamp_ms() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
 
 void broadcast(const std::string &msg) {
   for (auto [id, client] : clients) {
@@ -94,7 +101,8 @@ int main() {
           json jmsg = {{"event", "userjoin"},
                        {"id", std::to_string(c_id)},
                        {"username", uname},
-                       {"color", color}};
+                       {"color", color},
+                       {"timestamp", current_timestamp_ms()}};
 
           broadcast(jmsg.dump());
 
@@ -102,6 +110,7 @@ int main() {
                                   {"id", std::to_string(c_id)},
                                   {"username", uname},
                                   {"color", clients[c_id].color},
+                                  {"timestamp", current_timestamp_ms()},
                                   {"msg", " joined."}}
                                .dump());
           break;
@@ -128,6 +137,7 @@ int main() {
                        {"id", std::to_string(c_id)},
                        {"username", clients[c_id].username},
                        {"color", clients[c_id].color},
+                       {"timestamp", current_timestamp_ms()},
                        {"msg", msg}};
           payload = jmsg.dump();
           remember_message(payload);
@@ -142,6 +152,7 @@ int main() {
                             {"id", std::to_string(c_id)},
                             {"username", clients[c_id].username},
                             {"color", clients[c_id].color},
+                            {"timestamp", current_timestamp_ms()},
                             {"msg", " left."}}
                          .dump());
     {
