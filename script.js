@@ -31,6 +31,7 @@ function addMessage(message, color) {
   txt.className = "chat-msg";
   msgBox.prepend(txt);
 }
+
 function addUser(id, user) {
 	users.set(id,{username: user.username, color: user.color});
 	let txt = document.createElement("p");
