@@ -6,7 +6,9 @@ let users = new Map();
 input.addEventListener('blur', () => input.focus());
 input.focus();
 
-const socket = new WebSocket("wss://localhost:8080/ws");
+const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const wsHost = "chat.waffledogz.us";
+const socket = new WebSocket(`${wsProtocol}//${wsHost}/ws`);
 
 socket.addEventListener("error", (e) => alert("WS error: " + e));
 socket.addEventListener("close", (e) => alert("WS closed: " + e.code + " " + e.reason));
