@@ -65,10 +65,12 @@ socket.addEventListener("message", (event) => {
 
       users.delete(dj.id);
       return;
-      }
+    }
     case "msg": {
-      let txt = document.createElement("p");
-      addMessage(`<${users.get(dj.id).username}> ` + dj.msg, users.get(dj.id).color);
+      const user = users.get(dj.id);
+      const messageUsername = dj.username ?? user?.username ?? "unknown";
+      const messageColor = dj.color ?? user?.color ?? "white";
+      addMessage(`<${messageUsername}> ` + dj.msg, messageColor);
       return;
     }
   }

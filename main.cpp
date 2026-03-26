@@ -1,9 +1,19 @@
+#ifndef WINVER
+#define WINVER 0x0A00
+#endif
+
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0A00
+#endif
+
 #include "color.h"
 #include "httplib.h"
 #include "json.hpp"
 #include <map>
 #include <mutex>
 #include <string>
+#include <deque>
+#include <vector>
 
 using nlohmann::json;
 
@@ -15,10 +25,19 @@ struct Client {
 
 std::map<int, Client> clients;
 std::mutex clients_mutex;
+std::deque<std::string> message_history;
+constexpr size_t MAX_HISTORY = 256;
 
 void broadcast(const std::string &msg) {
   for (auto [id, client] : clients) {
     clients[id].ws->send(msg);
+  }
+}
+
+void remember_message(const std::string &msg) {
+  message_history.push_back(msg);
+  if (message_history.size() > MAX_HISTORY) {
+    message_history.pop_front();
   }
 }
 
@@ -37,6 +56,7 @@ int main() {
       "/ws", [](const httplib::Request &req, httplib::ws::WebSocket &ws) {
         std::string msg;
         int c_id;
+        std::vector<std::string> history_snapshot;
         {
           std::lock_guard<std::mutex> l(clients_mutex);
 
@@ -51,6 +71,10 @@ int main() {
             }
           }
           clients[c_id] = (Client{&ws, "", randomColor()});
+          history_snapshot.assign(message_history.begin(), message_history.end());
+        }
+        for (const auto &old_msg : history_snapshot) {
+          ws.send(old_msg);
         }
         while (ws.read(msg)) {
           std::cout << msg << std::endl;
@@ -58,13 +82,17 @@ int main() {
           {
             switch (msg[1]) {
             case 'u': {
-              std::lock_guard<std::mutex> l(clients_mutex);
               std::string uname = msg.substr(2);
-              clients[c_id].username = uname;
+              std::string color;
+              {
+                std::lock_guard<std::mutex> l(clients_mutex);
+                clients[c_id].username = uname;
+                color = clients[c_id].color;
+              }
               json jmsg = {{"event", "userjoin"},
                            {"id", std::to_string(c_id)},
                            {"username", uname},
-                           {"color", clients[c_id].color}};
+                           {"color", color}};
 
               broadcast(jmsg.dump());
               break;
@@ -84,10 +112,18 @@ int main() {
             }
             }
           } else {
-            json jmsg = {
-                {"event", "msg"}, {"id", std::to_string(c_id)}, {"msg", msg}};
-            std::lock_guard<std::mutex> l(clients_mutex);
-            broadcast(jmsg.dump());
+            std::string payload;
+            {
+              std::lock_guard<std::mutex> l(clients_mutex);
+              json jmsg = {{"event", "msg"},
+                           {"id", std::to_string(c_id)},
+                           {"username", clients[c_id].username},
+                           {"color", clients[c_id].color},
+                           {"msg", msg}};
+              payload = jmsg.dump();
+              remember_message(payload);
+            }
+            broadcast(payload);
           }
         }
 
