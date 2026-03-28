@@ -1,6 +1,5 @@
 let username = localStorage.getItem("chat_name");
 let userColor = localStorage.getItem("chat_color");
-let notif_sound = new Audio('notif.mp3')
 
 if (username == null || username.length === 0) {
   window.location.href = `/name.html?v=${Date.now()}`;
@@ -28,7 +27,6 @@ const wsHost = "localhost:8080"; // Change this to your server's address and por
 const socket = new WebSocket(`${wsProtocol}//${wsHost}/ws`);
 let movedToErrorPage = false;
 
-
 socket.addEventListener("error", () => {
   addMessage("an error occurred. check console for details", "red");
 });
@@ -43,8 +41,20 @@ socket.addEventListener("open", () => {
   );
 });
 
+const notifAudio = new Audio("/notif.mp3");
+let audioUnlocked = false;
+
+document.addEventListener("keydown", () => {
+  if (!audioUnlocked) {
+    notifAudio.play().then(()=>{notifAudio.pause();notifAudio.currentTime=0;});audioUnlocked=true;}});
+
+function playNotificationBeep() {
+  notifAudio.currentTime = 0;
+  notifAudio.play().catch(()=>{});
+}
+
 function addMessage(message, color) {
-  notif_sound.play();
+  playNotificationBeep();
   addMessageAt(message, color, Date.now());
 }
 
