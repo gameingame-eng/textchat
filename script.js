@@ -1,4 +1,10 @@
-let username = prompt("Username: ");
+let username = localStorage.getItem("chat_name");
+
+if (username == null || username.length === 0) {
+  window.location.href = `/name.html?v=${Date.now()}`;
+  throw new Error("Missing username; redirecting to name page.");
+}
+
 let username_ok = false;
 let msgBox = document.getElementById('msgs-box');
 let input = document.getElementById('msg-input');
@@ -14,9 +20,24 @@ input.focus();
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 const wsHost = "chat.waffledogz.us";
 const socket = new WebSocket(`${wsProtocol}//${wsHost}/ws`);
+let movedToErrorPage = false;
 
-socket.addEventListener("error", (e) => alert("WS error: " + e));
-socket.addEventListener("close", (e) => alert("WS closed: " + e.code + " " + e.reason));
+function goToErrorPage(message) {
+  if (movedToErrorPage) return;
+  movedToErrorPage = true;
+  const msg = encodeURIComponent(message || "Connection to chat was lost.");
+  window.location.href = `/error.html?msg=${msg}`;
+}
+
+socket.addEventListener("error", () => {
+  goToErrorPage("Socket Error!");
+});
+
+socket.addEventListener("close", (e) => {
+  if (e.code === 1000 && e.wasClean) return;
+  const reason = e.reason ? ` (${e.reason})` : "";
+  goToErrorPage(`Connection closed (code ${e.code})${reason}.`);
+});
 
 socket.addEventListener("open", () => {
   socket.send("&u" + username);
@@ -69,9 +90,9 @@ socket.addEventListener("message", (event) => {
 	username_ok = true;
       }
       else if (dj.result == "taken") {
-	alert("username taken :(");
-	username = prompt("Username: ");
-	socket.send("&u" + username);
+        alert("username taken :(");
+        localStorage.removeItem("chat_name");
+        window.location.href = `/name.html?v=${Date.now()}`;
       }
     }
     return;
