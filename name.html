@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter Name</title>
+    <link rel="stylesheet" href="style.css?v=8"></link>
+    <style>
+        #name-prompt {
+            display: flex;
+            justify-content: center;
+            font-size: clamp(2.4rem, 7vw, 3.8rem);
+            margin-top: 2rem;
+            margin-bottom: 8rem;
+        }
+
+        #name-input {
+            display: flex;
+            justify-self: center;
+            flex-shrink: 0;
+            width: 50%;
+            background-color: var(--bg3);
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            outline: none;
+            font-size: 15px;
+            margin-bottom: 2rem;
+        }
+
+        #name-submit {
+            display: block;
+            margin: 1rem auto 0;
+            padding: 0.6rem 1.2rem;
+        }
+
+        #name-error {
+            text-align: center;
+            color: #e67e80;
+            min-height: 1.25rem;
+            margin-top: 0.5rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="name-prompt">Enter Your Name</h1>
+    <input type="text" id="name-input" maxlength="24" placeholder="Your name">
+    <button id="name-submit" type="button" disabled>Submit</button>
+    <p id="name-error"></p>
+    <script>
+      const namePrompt = document.getElementById("name-prompt");
+      const promptColors = ["--green", "--aqua", "--fg"];
+      const randomColorVar = promptColors[Math.floor(Math.random() * promptColors.length)];
+      namePrompt.style.color = `var(${randomColorVar})`;
+
+      const nameInput = document.querySelector("#name-input");
+      const nameSubmit = document.querySelector("#name-submit");
+      const nameError = document.querySelector("#name-error");
+
+      function isValidName(name) {
+        return name.length > 0;
+      }
+
+      function updateSubmitState() {
+        nameSubmit.disabled = !isValidName(nameInput.value);
+      }
+
+      const oldName = localStorage.getItem("chat_name");
+      if (oldName !== null) {
+        nameInput.value = oldName;
+      }
+
+      function submitName() {
+        const name = nameInput.value;
+        if (!isValidName(name)) {
+          nameError.textContent = "Enter a name.";
+          nameInput.focus();
+          return;
+        }
+        nameError.textContent = "";
+        localStorage.setItem("chat_name", name);
+        window.location.href = "index.html";
+      }
+
+      nameInput.addEventListener("input", () => {
+        nameError.textContent = "";
+        updateSubmitState();
+      });
+
+      nameInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          submitName();
+        }
+      });
+
+      nameSubmit.addEventListener("click", submitName);
+      updateSubmitState();
+    </script>
+</body>
+</html>

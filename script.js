@@ -1,4 +1,10 @@
-let username = prompt("Username: ");
+let username = localStorage.getItem("chat_name");
+
+if (username == null) {
+  username = prompt("Username: ");
+  localStorage.setItem("chat_name", username);
+}
+
 let username_ok = false;
 let msgBox = document.getElementById('msgs-box');
 let input = document.getElementById('msg-input');
