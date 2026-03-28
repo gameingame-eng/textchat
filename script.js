@@ -62,6 +62,12 @@ function formatTimestamp(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 }
 
+function shouldOutlineChatName(color) {
+  if (typeof color !== "string") return false;
+  const normalizedColor = color.replace(/\s+/g, "").toLowerCase();
+  return normalizedColor === "rgb(35,42,46)" || normalizedColor === "#232a2e";
+}
+
 function addMessageAt(message, color, timestamp) {
   let txt = document.createElement("p");
   let time = formatTimestamp(timestamp);
@@ -72,6 +78,35 @@ function addMessageAt(message, color, timestamp) {
   msgspan.textContent = message;
   msgspan.style.color = color;
   txt.appendChild(timespan);
+  txt.appendChild(msgspan);
+  txt.style.color = color;
+  txt.className = "chat-msg";
+  msgBox.prepend(txt);
+}
+
+function addChatMessageAt(username, message, color, timestamp) {
+  let txt = document.createElement("p");
+  let time = formatTimestamp(timestamp);
+  let timespan = document.createElement("span");
+  let namespan = document.createElement("span");
+  let msgspan = document.createElement("span");
+
+  timespan.innerHTML = `[${time}]&emsp;`;
+  timespan.style.cssText = "color: var(--border); font-size: 12px;";
+
+  namespan.textContent = `<${username}> `;
+  namespan.style.color = color;
+  if (shouldOutlineChatName(color)) {
+    namespan.style.webkitTextStroke = "1px white";
+    namespan.style.textStroke = "1px white";
+    namespan.style.textShadow = "-1px 0 white, 0 1px white, 1px 0 white, 0 -1px white";
+  }
+
+  msgspan.textContent = message;
+  msgspan.style.color = color;
+
+  txt.appendChild(timespan);
+  txt.appendChild(namespan);
   txt.appendChild(msgspan);
   txt.style.color = color;
   txt.className = "chat-msg";
@@ -138,7 +173,7 @@ socket.addEventListener("message", (event) => {
       const user = users.get(dj.id);
       const messageUsername = dj.username ?? user?.username ?? "unknown";
       const messageColor = dj.color ?? user?.color ?? "white";
-      addMessageAt(`<${messageUsername}> ` + dj.msg, messageColor, dj.timestamp ?? Date.now());
+      addChatMessageAt(messageUsername, dj.msg, messageColor, dj.timestamp ?? Date.now());
       return;
     }
     case "typing": {
