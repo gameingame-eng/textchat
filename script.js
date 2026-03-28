@@ -24,7 +24,7 @@ input.addEventListener('blur', () => input.focus());
 input.focus();
 
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsHost = "chat.waffledogz.us"; // Change this to your server's address and port if needed
+const wsHost = "localhost:8080"; // Change this to your server's address and port if needed
 const socket = new WebSocket(`${wsProtocol}//${wsHost}/ws`);
 let movedToErrorPage = false;
 
