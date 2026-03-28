@@ -202,9 +202,11 @@ socket.addEventListener("message", (event) => {
 let typing_reset_timeout;
 
 function send(event) {
-  typing = true;
-  clearTimeout(typing_reset_timeout);
-  typing_reset_timeout = setTimeout(()=>{typing=false},typing_timer);
+  if (event.keyCode != 13) {
+  	typing = true;
+ 	 clearTimeout(typing_reset_timeout);
+ 	 typing_reset_timeout = setTimeout(()=>{typing=false},typing_timer);
+  }
   if (event && event.keyCode != 13) return;
   
   let input_txt = input.value;
