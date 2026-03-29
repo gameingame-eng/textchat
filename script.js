@@ -15,6 +15,8 @@ let msgBox = document.getElementById('msgs-box');
 let input = document.getElementById('msg-input');
 let photoInput = document.getElementById('photo-input');
 let sendPhotoBtn = document.getElementById('send-photo-btn');
+let imageOverlay = document.getElementById('image-overlay');
+let overlayImg = document.getElementById('overlay-img');
 let users = new Map();
 let users_typing = Array();
 let typing = false;
@@ -87,12 +89,37 @@ input.addEventListener('blur', () => input.focus());
 input.focus();
 
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsHost = "localhost:8080"; // Change this to your server's address and port if needed
+const wsHost = "chat.waffledogz.us:8080"; // Change this to your server's address and port if needed
 const socket = new WebSocket(`${wsProtocol}//${wsHost}/ws`);
 let movedToErrorPage = false;
 
-socket.addEventListener("error", () => {
-  addMessage("an error occurred. check console for details", "red");
+function reportChatError(context, err) {
+  let details = "";
+  if (err) {
+    if (typeof err === "string") {
+      details = err;
+    } else if (err.message) {
+      details = err.message;
+    } else if (err.reason) {
+      details = err.reason;
+    } else {
+      details = String(err);
+    }
+  }
+  const text = details ? `${context}: ${details}` : context;
+  console.error(text, err);
+  addMessage(`[error] ${text}`, "red");
+}
+
+socket.addEventListener("error", (event) => {
+  reportChatError("websocket error", event);
+});
+
+socket.addEventListener("close", (event) => {
+  reportChatError(
+    `websocket closed (code ${event.code})`,
+    event.reason || "no reason provided"
+  );
 });
 
 socket.addEventListener("open", () => {
@@ -208,6 +235,8 @@ function addPhotoMessageAt(username, mime, base64Data, color, timestamp) {
   img.style.width = "100%";
   img.style.borderRadius = "8px";
   img.style.border = "1px solid var(--border)";
+  img.style.cursor = "pointer";
+  img.className = "clickable";
 
   txt.appendChild(timespan);
   txt.appendChild(namespan);
@@ -230,7 +259,13 @@ let has_gotten_users = false;
 
 socket.addEventListener("message", (event) => {
   let d = event.data;
-  let dj = JSON.parse(d)
+  let dj;
+  try {
+    dj = JSON.parse(d);
+  } catch (err) {
+    reportChatError("invalid server json", err);
+    return;
+  }
 
   let event_type = dj.event;
 
@@ -265,11 +300,15 @@ socket.addEventListener("message", (event) => {
       return;
     }
     case "userleft": {
-      document.getElementById("s-u-" + dj.id).remove();
-      let txt = document.createElement("p");
-      addMessageAt(`<${users.get(dj.id).username}> left.`,users.get(dj.id).color, dj.timestamp ?? Date.now())
-
-      users_typing.splice(users_typing.indexOf(dj.id),1);
+      const user = users.get(dj.id);
+      const userEl = document.getElementById("s-u-" + dj.id);
+      if (userEl) {
+        userEl.remove();
+      }
+      if (user) {
+        addMessageAt(`<${user.username}> left.`, user.color, dj.timestamp ?? Date.now());
+      }
+      users_typing = users_typing.filter((id) => id !== dj.id);
       users.delete(dj.id);
       return;
     }
@@ -334,8 +373,7 @@ async function send_image(file) {
     socket.send("&p");
     socket.send(imageBuffer);
   } catch (err) {
-    console.error("failed to send image", err);
-    addMessage("failed to send image", "red");
+    reportChatError("failed to send image", err);
   }
 }
 
@@ -361,6 +399,29 @@ if (sendPhotoBtn && photoInput) {
     }, 100);
   });
 }
+
+if (msgBox && imageOverlay && overlayImg) {
+  msgBox.addEventListener("click", (event) => {
+    const clicked = event.target;
+    if (!(clicked instanceof HTMLImageElement)) return;
+    if (!clicked.classList.contains("clickable")) return;
+    overlayImg.src = clicked.src;
+    imageOverlay.classList.remove("hidden");
+  });
+
+  imageOverlay.addEventListener("click", () => {
+    imageOverlay.classList.add("hidden");
+    overlayImg.src = "";
+  });
+}
+
+window.addEventListener("error", (event) => {
+  reportChatError("javascript error", event.error || event.message);
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  reportChatError("unhandled promise rejection", event.reason);
+});
 
 function server_update_typing() {
   const isTypingNow = typing || photoPickerActive;
