@@ -89,7 +89,7 @@ input.addEventListener('blur', () => input.focus());
 input.focus();
 
 const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsHost = "192.168.68.81:8080"
+const wsHost = "chat.waffledogz.us"
 const wsUrl = `${wsProtocol}//${wsHost}/ws`;
 const socket = new WebSocket(wsUrl);
 let movedToErrorPage = false;
