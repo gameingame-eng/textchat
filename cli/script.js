@@ -396,6 +396,7 @@ function renderText(username, message, color, timestamp, grouped, senderId) {
 function renderImage(username, mime, base64Data, color, timestamp, grouped, senderId) {
   let txt = document.createElement("p");
   let time = formatTimestamp(timestamp);
+  const indentPx = getGroupedIndentPx(username, color, timestamp);
   let timespan = document.createElement("span");
   let namespan = document.createElement("span");
   let img = document.createElement("img");
@@ -415,6 +416,7 @@ function renderImage(username, mime, base64Data, color, timestamp, grouped, send
   img.style.marginTop = "6px";
   img.style.maxWidth = "260px";
   img.style.width = "100%";
+  img.style.marginLeft = grouped ? "0" : `${indentPx}px`;
   img.style.borderRadius = "8px";
   img.style.border = "1px solid var(--border)";
   img.style.cursor = "pointer";
@@ -427,7 +429,7 @@ function renderImage(username, mime, base64Data, color, timestamp, grouped, send
   txt.appendChild(document.createElement("br"));
   txt.appendChild(img);
   txt.className = grouped ? "chat-msg grouped-msg" : "chat-msg";
-  txt.style.marginLeft = grouped ? `${getGroupedIndentPx(username, color, timestamp)}px` : "0";
+  txt.style.marginLeft = grouped ? `${indentPx}px` : "0";
   stampUserMsg(txt, senderId);
   msgBox.prepend(txt);
 }
