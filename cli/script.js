@@ -556,25 +556,75 @@ async function renderPdfPreview(container, base64Data) {
     const loadingTask = pdfjsLib.getDocument({ data: bytes });
     const pdf = await loadingTask.promise;
 
-    container.innerHTML = `<p style="padding: 8px; color: var(--fg);">PDF Preview (${pdf.numPages} pages)</p>`;
+    container.innerHTML = "";
+
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px;color:var(--fg);";
+    const title = document.createElement("span");
+    title.textContent = `PDF Preview (${pdf.numPages} pages)`;
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.textContent = "◀";
+    prevBtn.style.cssText = "padding:4px 8px;border-radius:4px;";
+
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.textContent = "▶";
+    nextBtn.style.cssText = "padding:4px 8px;border-radius:4px;";
+
+    const pageLabel = document.createElement("span");
+    pageLabel.style.cssText = "font-size:12px;";
+    pageLabel.textContent = `1 / ${pdf.numPages}`;
+
+    controls.appendChild(prevBtn);
+    controls.appendChild(pageLabel);
+    controls.appendChild(nextBtn);
+    header.appendChild(title);
+    header.appendChild(controls);
 
     const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    const page = await pdf.getPage(1);
-    const initialViewport = page.getViewport({ scale: 1.0 });
-    const availableWidth = Math.max(240, Math.min(600, container.clientWidth || 600) - 16);
-    const scale = Math.min(1.0, availableWidth / initialViewport.width);
-    const viewport = page.getViewport({ scale });
-
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
     canvas.style.maxWidth = "100%";
     canvas.style.height = "auto";
-    
-    await page.render({ canvasContext: context, viewport });
-    
-    container.innerHTML = `<p style="padding: 8px; color: var(--fg);">PDF - ${pdf.numPages} pages (showing page 1)</p>`;
-    container.appendChild(canvas);
+    const canvasWrapper = document.createElement("div");
+    canvasWrapper.style.cssText = "padding:8px;overflow:auto;";
+    canvasWrapper.appendChild(canvas);
+
+    let currentPage = 1;
+    async function renderPage(pageNum) {
+      const page = await pdf.getPage(pageNum);
+      const initialViewport = page.getViewport({ scale: 1.0 });
+      const availableWidth = Math.max(240, Math.min(600, container.clientWidth || container.getBoundingClientRect().width || 600) - 16);
+      const scale = Math.min(1.0, availableWidth / initialViewport.width);
+      const viewport = page.getViewport({ scale });
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext("2d");
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      pageLabel.textContent = `${pageNum} / ${pdf.numPages}`;
+      prevBtn.disabled = pageNum <= 1;
+      nextBtn.disabled = pageNum >= pdf.numPages;
+    }
+
+    prevBtn.addEventListener("click", async () => {
+      if (currentPage <= 1) return;
+      currentPage -= 1;
+      await renderPage(currentPage);
+    });
+
+    nextBtn.addEventListener("click", async () => {
+      if (currentPage >= pdf.numPages) return;
+      currentPage += 1;
+      await renderPage(currentPage);
+    });
+
+    container.appendChild(header);
+    container.appendChild(canvasWrapper);
+    await renderPage(1);
   } catch (err) {
     container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview PDF: ${err.message}</p>`;
     console.error("PDF preview error:", err);
@@ -608,23 +658,35 @@ async function renderDocxPreview(container, base64Data) {
 
 async function renderPptxPreview(container, base64Data) {
   try {
+    const PptxLib = window.PptxJS || window.pptxjs || window.Pptx || window.PPTXJS;
+    if (!PptxLib || !PptxLib.Presentation) {
+      throw new Error("PPTX preview library not loaded");
+    }
+
     const binaryString = atob(base64Data);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    
-    const pres = new PptxJS.Presentation();
+
+    const pres = new PptxLib.Presentation();
     const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
     await pres.load(blob);
-    
-    container.innerHTML = `<p style="padding: 8px; color: var(--fg);">PowerPoint Presentation - ${pres.slides.length} slides</p>`;
-    
-    const summary = pres.slides.slice(0, 2).map((slide, i) => 
-      `Slide ${i + 1}: ${slide.name || "Untitled"}`
-    ).join("\n");
-    
-    container.innerHTML += `<pre style="padding: 8px; margin: 0; color: var(--fg); font-size: 12px;">${summary}${pres.slides.length > 2 ? "\n... and more" : ""}</pre>`;
+
+    container.innerHTML = "";
+    const title = document.createElement("p");
+    title.style.cssText = "padding: 8px; color: var(--fg); margin:0;";
+    title.textContent = `PowerPoint Presentation - ${pres.slides.length} slides`;
+
+    const list = document.createElement("pre");
+    list.style.cssText = "padding: 8px; margin:0; white-space: pre-wrap; color: var(--fg); font-size: 12px;";
+    list.textContent = pres.slides.slice(0, 4).map((slide, i) => `Slide ${i + 1}: ${slide.name || "Untitled"}`).join("\n");
+    if (pres.slides.length > 4) {
+      list.textContent += `\n... and more`;
+    }
+
+    container.appendChild(title);
+    container.appendChild(list);
   } catch (err) {
     container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview PPTX: ${err.message}</p>`;
     console.error("PPTX preview error:", err);
