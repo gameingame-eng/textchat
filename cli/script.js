@@ -542,19 +542,22 @@ function renderDocument(username, filename, doctype, base64Data, color, timestam
 
 async function renderPdfPreview(container, base64Data) {
   try {
+    if (typeof pdfjsLib === "undefined" || !pdfjsLib.getDocument) {
+      throw new Error("PDF.js library not loaded");
+    }
+
     const binaryString = atob(base64Data);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    
-    if (!window.pdfjsWorker) {
-      window.pdfjsWorker = await pdfjsLib.getDocument({ data: bytes }).promise;
-    }
-    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
-    
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.js";
+    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+    const pdf = await loadingTask.promise;
+
     container.innerHTML = `<p style="padding: 8px; color: var(--fg);">PDF Preview (${pdf.numPages} pages)</p>`;
-    
+
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     const page = await pdf.getPage(1);

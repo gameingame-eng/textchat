@@ -33,10 +33,15 @@
    <div id="image-overlay" class="img-overlay hidden" hidden>
      <img id="overlay-img" alt="Expanded chat image">
    </div>
-   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.js"></script>
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+   <script>
+     if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+       window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+     }
+   </script>
    <script src="https://cdn.jsdelivr.net/npm/docx@8.11.3"></script>
    <script src="https://cdn.jsdelivr.net/npm/pptxjs@0.5.0/dist/pptxjs.js"></script>
-   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-c.min.js"></script>
