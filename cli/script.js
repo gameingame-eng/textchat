@@ -746,9 +746,11 @@ async function renderDocxPreview(container, base64Data) {
 
 async function renderPptxPreview(container, base64Data) {
   try {
-    const PptxLib = window.PptxJS || window.pptxjs || window.Pptx || window.PPTXJS;
-    if (!PptxLib || !PptxLib.Presentation) {
-      throw new Error("PPTX preview library not loaded");
+    const renderPptx = window.pptx2html || window.renderPptx;
+    if (typeof renderPptx !== "function") {
+      console.log("Available PPTX globals:", Object.keys(window).filter(k => k.toLowerCase().includes('ppt')));
+      container.innerHTML = `<p style="padding: 8px; color: var(--fg);">PPTX preview library not loaded. File uploaded successfully.</p>`;
+      return;
     }
 
     const binaryString = atob(base64Data);
@@ -757,91 +759,23 @@ async function renderPptxPreview(container, base64Data) {
       bytes[i] = binaryString.charCodeAt(i);
     }
 
-    const pres = new PptxLib.Presentation();
-    const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
-    await pres.load(blob);
-
-    if (!pres.slides || pres.slides.length === 0) {
-      throw new Error("No slides found in PPTX");
-    }
-
     container.innerHTML = "";
+    container.style.position = "relative";
+    container.style.overflow = "auto";
+    container.style.padding = "0";
+
     const header = document.createElement("div");
     header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px;color:var(--fg);";
     const title = document.createElement("span");
-    title.textContent = `PPTX Preview (${pres.slides.length} slides)`;
-    const controls = document.createElement("div");
-    controls.style.cssText = "display:flex;align-items:center;gap:8px;";
-    const prevBtn = document.createElement("button");
-    prevBtn.type = "button";
-    prevBtn.textContent = "←";
-    prevBtn.style.cssText = "padding:4px 10px;border-radius:4px;min-width:28px;font-size:14px;";
-    const pageLabel = document.createElement("span");
-    pageLabel.style.cssText = "font-size:12px;";
-    const nextBtn = document.createElement("button");
-    nextBtn.type = "button";
-    nextBtn.textContent = "→";
-    nextBtn.style.cssText = "padding:4px 10px;border-radius:4px;min-width:28px;font-size:14px;";
-    controls.appendChild(prevBtn);
-    controls.appendChild(pageLabel);
-    controls.appendChild(nextBtn);
+    title.textContent = `PPTX Preview`;
     header.appendChild(title);
-    header.appendChild(controls);
-
-    const content = document.createElement("div");
-    content.style.cssText = "padding:8px;color:var(--fg);font-size:12px;white-space:pre-wrap;word-wrap:break-word;";
-
-    const slideText = (slide) => {
-      const parts = [];
-      if (slide.name) {
-        parts.push(slide.name);
-      }
-      if (slide.shapes && Array.isArray(slide.shapes)) {
-        slide.shapes.forEach((shape) => {
-          if (shape.text) {
-            parts.push(shape.text);
-          } else if (shape.title) {
-            parts.push(shape.title);
-          }
-        });
-      }
-      if (parts.length === 0) {
-        parts.push(JSON.stringify(slide, null, 2).slice(0, 500));
-      }
-      return parts.map(p => escapeHtml(String(p))).join("\n\n");
-    };
-
-    let currentSlide = 1;
-    function renderSlide(slideNum) {
-      const slide = pres.slides[slideNum - 1];
-      content.innerHTML = "";
-      const heading = document.createElement("div");
-      heading.style.cssText = "margin-bottom:8px;font-weight:700;";
-      heading.textContent = `Slide ${slideNum} of ${pres.slides.length}`;
-      const body = document.createElement("pre");
-      body.style.cssText = "margin:0;color:var(--fg);font-size:12px;white-space:pre-wrap;word-wrap:break-word;";
-      body.textContent = slideText(slide);
-      content.appendChild(heading);
-      content.appendChild(body);
-      pageLabel.textContent = `${slideNum} / ${pres.slides.length}`;
-      prevBtn.disabled = slideNum <= 1;
-      nextBtn.disabled = slideNum >= pres.slides.length;
-    }
-
-    prevBtn.addEventListener("click", () => {
-      if (currentSlide <= 1) return;
-      currentSlide -= 1;
-      renderSlide(currentSlide);
-    });
-    nextBtn.addEventListener("click", () => {
-      if (currentSlide >= pres.slides.length) return;
-      currentSlide += 1;
-      renderSlide(currentSlide);
-    });
-
     container.appendChild(header);
-    container.appendChild(content);
-    renderSlide(1);
+
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "width:100%;height:auto;";
+    container.appendChild(wrapper);
+
+    await renderPptx(bytes.buffer, wrapper);
   } catch (err) {
     container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview PPTX: ${err.message}</p>`;
     console.error("PPTX preview error:", err);
