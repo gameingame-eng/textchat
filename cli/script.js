@@ -34,6 +34,7 @@ const imageMaxWidth = 1280;
 const imageMaxHeight = 1280;
 const imageQuality = 0.375;
 const maxTextFileBytes = 128 * 1024;
+const pptxConversionMaxBytes = 64 * 1024 * 1024;
 
 function detectLanguage(filename) {
   const lower = (filename || "").toLowerCase();
@@ -178,6 +179,69 @@ function reportChatError(context, err) {
   const text = details ? `${context}: ${details}` : context;
   console.error(text, err);
   addMessage(`[error] ${text}`, "red");
+}
+
+function createUploadProgressMessage(filename) {
+  const txt = document.createElement("div");
+  const header = document.createElement("div");
+  const label = document.createElement("span");
+  const status = document.createElement("span");
+  const track = document.createElement("div");
+  const fill = document.createElement("div");
+
+  txt.className = "chat-msg file-msg upload-progress-msg";
+  header.className = "upload-progress-header";
+  label.className = "upload-progress-label";
+  status.className = "upload-progress-status";
+  track.className = "upload-progress-track";
+  fill.className = "upload-progress-fill";
+
+  label.textContent = `processing ${filename}`;
+  status.textContent = "Starting...";
+
+  track.appendChild(fill);
+  header.appendChild(label);
+  header.appendChild(status);
+  txt.appendChild(header);
+  txt.appendChild(track);
+  msgBox.prepend(txt);
+
+  return {
+    root: txt,
+    status,
+    fill,
+    setProgress(percent, nextStatus) {
+      fill.classList.remove("indeterminate");
+      fill.style.marginLeft = "0";
+      fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      if (nextStatus) {
+        status.textContent = nextStatus;
+      }
+    },
+    setIndeterminate(nextStatus) {
+      fill.classList.add("indeterminate");
+      fill.style.width = "";
+      if (nextStatus) {
+        status.textContent = nextStatus;
+      }
+    },
+    complete(nextStatus) {
+      txt.classList.add("done");
+      fill.classList.remove("indeterminate");
+      fill.style.marginLeft = "0";
+      fill.style.width = "100%";
+      status.textContent = nextStatus || "Done";
+      setTimeout(() => txt.remove(), 1200);
+    },
+    fail(nextStatus) {
+      txt.classList.add("error");
+      fill.classList.remove("indeterminate");
+      fill.style.marginLeft = "0";
+      fill.style.width = "100%";
+      status.textContent = nextStatus || "Failed";
+      setTimeout(() => txt.remove(), 4000);
+    }
+  };
 }
 
 function safeSendWs(data, context) {
@@ -535,8 +599,8 @@ function renderDocument(username, filename, doctype, base64Data, color, timestam
     renderPdfPreview(previewContainer, base64Data);
   } else if (doctype === "docx") {
     renderDocxPreview(previewContainer, base64Data);
-  } else if (doctype === "pptx") {
-    renderPptxPreview(previewContainer, base64Data);
+  } else {
+    previewContainer.innerHTML = `<p style="padding: 8px; color: var(--fg);">No preview available for this document type.</p>`;
   }
 }
 
@@ -741,44 +805,6 @@ async function renderDocxPreview(container, base64Data) {
   } catch (err) {
     container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview DOCX: ${err.message}</p>`;
     console.error("DOCX preview error:", err);
-  }
-}
-
-async function renderPptxPreview(container, base64Data) {
-  try {
-    const renderPptx = window.pptx2html || window.renderPptx;
-    if (typeof renderPptx !== "function") {
-      console.log("Available PPTX globals:", Object.keys(window).filter(k => k.toLowerCase().includes('ppt')));
-      container.innerHTML = `<p style="padding: 8px; color: var(--fg);">PPTX preview library not loaded. File uploaded successfully.</p>`;
-      return;
-    }
-
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    container.innerHTML = "";
-    container.style.position = "relative";
-    container.style.overflow = "auto";
-    container.style.padding = "0";
-
-    const header = document.createElement("div");
-    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px;color:var(--fg);";
-    const title = document.createElement("span");
-    title.textContent = `PPTX Preview`;
-    header.appendChild(title);
-    container.appendChild(header);
-
-    const wrapper = document.createElement("div");
-    wrapper.style.cssText = "width:100%;height:auto;";
-    container.appendChild(wrapper);
-
-    await renderPptx(bytes.buffer, wrapper);
-  } catch (err) {
-    container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview PPTX: ${err.message}</p>`;
-    console.error("PPTX preview error:", err);
   }
 }
 
@@ -1061,7 +1087,7 @@ async function send_document(file) {
   } else if (ext === '.docx') {
     await send_docx(file);
   } else if (ext === '.pptx') {
-    await send_pptx(file);
+    await send_pptx_as_pdf(file);
   } else {
     reportChatError("invalid document format", `file type ${ext} not supported`);
   }
@@ -1091,15 +1117,66 @@ async function send_docx(file) {
   }
 }
 
-async function send_pptx(file) {
+function convertPptxToPdfLocally(file, progress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/convert-pptx", true);
+    xhr.responseType = "blob";
+    xhr.setRequestHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      const percent = 5 + Math.round((event.loaded / event.total) * 35);
+      progress.setProgress(percent, `Uploading ${file.name} for local conversion...`);
+    });
+
+    xhr.addEventListener("readystatechange", () => {
+      if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED) {
+        progress.setIndeterminate(`Converting ${file.name} to PDF locally...`);
+      }
+    });
+
+    xhr.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      const percent = 75 + Math.round((event.loaded / event.total) * 20);
+      progress.setProgress(percent, `Downloading converted PDF...`);
+    });
+
+    xhr.addEventListener("load", async () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const message = await xhr.response.text().catch(() => "");
+        reject(new Error(message || `conversion failed (${xhr.status})`));
+        return;
+      }
+
+      const headerName = xhr.getResponseHeader("X-Converted-Filename");
+      const pdfName = headerName ? decodeURIComponent(headerName) : file.name.replace(/\.pptx$/i, ".pdf");
+      resolve(new File([xhr.response], pdfName, { type: "application/pdf" }));
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("local conversion request failed")));
+    xhr.addEventListener("abort", () => reject(new Error("local conversion request aborted")));
+    xhr.send(file);
+  });
+}
+
+async function send_pptx_as_pdf(file) {
+  const progress = createUploadProgressMessage(file.name);
+
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    if (!safeSendWs("&d" + JSON.stringify({ filename: file.name, doctype: "pptx" }), "failed to start PPTX upload")) {
-      return;
+    if (file.size > pptxConversionMaxBytes) {
+      throw new Error(`file is too large for local conversion (max ${Math.floor(pptxConversionMaxBytes / (1024 * 1024))} MB)`);
     }
-    safeSendWs(new Uint8Array(arrayBuffer), "failed to send PPTX bytes");
+
+    progress.setProgress(2, `Preparing ${file.name}...`);
+    const pdfFile = await convertPptxToPdfLocally(file, progress);
+    progress.setProgress(96, `Sending ${pdfFile.name} to chat...`);
+    await send_pdf(pdfFile);
+    progress.complete(`Sent ${pdfFile.name}`);
   } catch (err) {
-    reportChatError("failed to send PPTX", err);
+    progress.fail("PPTX conversion failed");
+    reportChatError("failed to convert PPTX locally", err);
   }
 }
 
