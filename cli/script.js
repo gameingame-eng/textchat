@@ -36,6 +36,14 @@ const imageQuality = 0.375;
 const maxTextFileBytes = 128 * 1024;
 const pptxConversionMaxBytes = 64 * 1024 * 1024;
 
+if (Notification.permission !== "granted") {
+  Notification.requestPermission().then(permission => {
+    if (permission === "granted") {
+      console.log("notification permissiom granted!");
+    }
+  });
+}
+
 function detectLanguage(filename) {
   const lower = (filename || "").toLowerCase();
   const dot = lower.lastIndexOf(".");
@@ -72,6 +80,18 @@ function detectLanguage(filename) {
   };
   return languageByExtension[ext] ?? "";
 }
+
+function sendDesktopNotification(title, bodyText) {
+  if (Notification.permission === "granted") {
+    new Notification(title, {
+      body: bodyText
+    });
+  }
+}
+
+// Usage
+// sendDesktopNotification("New Message", "Someone mentioned you!");
+
 
 async function compressImage(file) {
   let quality = imageQuality;
@@ -348,6 +368,9 @@ function playNotificationBeep() {
 }
 
 function addMessage(message, color) {
+  if (message.includes("." + username)) {
+    sendDesktopNotification("Mentioned", "you have been pinged")
+  }   
   playNotificationBeep();
   renderSys(message, color, Date.now());
 }

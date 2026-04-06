@@ -1,4 +1,4 @@
-simple chatroom built with a c++ server and a couple libraries
+simple chatroom built with a c++ server with libs and a web-stack frontend 
 
 note: server runs on my home pc and may shut down if my power goes out. please notify me on Discord: waffledogz, or in Github Issues in this repo
 
