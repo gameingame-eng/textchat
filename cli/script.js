@@ -34,6 +34,7 @@ const imageMaxWidth = 1280;
 const imageMaxHeight = 1280;
 const imageQuality = 0.375;
 const maxTextFileBytes = 128 * 1024;
+const pptxConversionMaxBytes = 64 * 1024 * 1024;
 
 if (Notification.permission !== "granted") {
   Notification.requestPermission().then(permission => {
@@ -198,6 +199,69 @@ function reportChatError(context, err) {
   const text = details ? `${context}: ${details}` : context;
   console.error(text, err);
   addMessage(`[error] ${text}`, "red");
+}
+
+function createUploadProgressMessage(filename) {
+  const txt = document.createElement("div");
+  const header = document.createElement("div");
+  const label = document.createElement("span");
+  const status = document.createElement("span");
+  const track = document.createElement("div");
+  const fill = document.createElement("div");
+
+  txt.className = "chat-msg file-msg upload-progress-msg";
+  header.className = "upload-progress-header";
+  label.className = "upload-progress-label";
+  status.className = "upload-progress-status";
+  track.className = "upload-progress-track";
+  fill.className = "upload-progress-fill";
+
+  label.textContent = `processing ${filename}`;
+  status.textContent = "Starting...";
+
+  track.appendChild(fill);
+  header.appendChild(label);
+  header.appendChild(status);
+  txt.appendChild(header);
+  txt.appendChild(track);
+  msgBox.prepend(txt);
+
+  return {
+    root: txt,
+    status,
+    fill,
+    setProgress(percent, nextStatus) {
+      fill.classList.remove("indeterminate");
+      fill.style.marginLeft = "0";
+      fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      if (nextStatus) {
+        status.textContent = nextStatus;
+      }
+    },
+    setIndeterminate(nextStatus) {
+      fill.classList.add("indeterminate");
+      fill.style.width = "";
+      if (nextStatus) {
+        status.textContent = nextStatus;
+      }
+    },
+    complete(nextStatus) {
+      txt.classList.add("done");
+      fill.classList.remove("indeterminate");
+      fill.style.marginLeft = "0";
+      fill.style.width = "100%";
+      status.textContent = nextStatus || "Done";
+      setTimeout(() => txt.remove(), 1200);
+    },
+    fail(nextStatus) {
+      txt.classList.add("error");
+      fill.classList.remove("indeterminate");
+      fill.style.marginLeft = "0";
+      fill.style.width = "100%";
+      status.textContent = nextStatus || "Failed";
+      setTimeout(() => txt.remove(), 4000);
+    }
+  };
 }
 
 function safeSendWs(data, context) {
@@ -515,6 +579,269 @@ function renderFile(username, filename, content, language, color, timestamp, gro
   }
 }
 
+function renderDocument(username, filename, doctype, base64Data, color, timestamp, grouped, senderId) {
+  let txt = document.createElement("div");
+  let header = document.createElement("div");
+  let time = formatTimestamp(timestamp);
+  let timespan = document.createElement("span");
+  let namespan = document.createElement("span");
+  let filespan = document.createElement("span");
+  let previewContainer = document.createElement("div");
+
+  timespan.innerHTML = `[${time}]&emsp;`;
+  timespan.style.cssText = "color: var(--border); font-size: 12px;";
+
+  namespan.textContent = `<${username}> `;
+  namespan.style.color = color;
+  if (shouldOutlineChatName(color)) {
+    applyOutlinedChatTextStyles(namespan);
+  }
+
+  filespan.textContent = `uploaded ${filename} (${doctype.toUpperCase()})`;
+  filespan.style.color = "var(--fg)";
+
+  previewContainer.style.cssText = "margin-top: 8px; max-width: 600px; max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; background: var(--bg);";
+  previewContainer.dataset.doctype = doctype;
+  previewContainer.dataset.filename = filename;
+
+  if (!grouped) {
+    header.appendChild(timespan);
+    header.appendChild(namespan);
+  }
+  header.appendChild(filespan);
+  header.className = "file-msg-header";
+
+  txt.appendChild(header);
+  txt.appendChild(previewContainer);
+  txt.className = grouped ? "chat-msg file-msg grouped-msg" : "chat-msg file-msg";
+  txt.style.marginLeft = grouped ? `${getGroupedIndentPx(username, color, timestamp)}px` : "0";
+  stampUserMsg(txt, senderId);
+  msgBox.prepend(txt);
+
+  if (doctype === "pdf") {
+    renderPdfPreview(previewContainer, base64Data);
+  } else if (doctype === "docx") {
+    renderDocxPreview(previewContainer, base64Data);
+  } else {
+    previewContainer.innerHTML = `<p style="padding: 8px; color: var(--fg);">No preview available for this document type.</p>`;
+  }
+}
+
+async function renderPdfPreview(container, base64Data) {
+  try {
+    if (typeof pdfjsLib === "undefined" || !pdfjsLib.getDocument) {
+      throw new Error("PDF.js library not loaded");
+    }
+
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+    const pdf = await loadingTask.promise;
+
+    container.innerHTML = "";
+
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px;color:var(--fg);";
+    const title = document.createElement("span");
+    title.textContent = `PDF Preview (${pdf.numPages} pages)`;
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;align-items:center;gap:8px;";
+
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.textContent = "←";
+    prevBtn.style.cssText = "padding:4px 10px;border-radius:4px;min-width:28px;font-size:14px;";
+
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.textContent = "→";
+    nextBtn.style.cssText = "padding:4px 10px;border-radius:4px;min-width:28px;font-size:14px;";
+
+    const pageLabel = document.createElement("span");
+    pageLabel.style.cssText = "font-size:12px;";
+    pageLabel.textContent = `1 / ${pdf.numPages}`;
+
+    controls.appendChild(prevBtn);
+    controls.appendChild(pageLabel);
+    controls.appendChild(nextBtn);
+    header.appendChild(title);
+    header.appendChild(controls);
+
+    const canvas = document.createElement("canvas");
+    canvas.style.maxWidth = "100%";
+    canvas.style.height = "auto";
+    const canvasWrapper = document.createElement("div");
+    canvasWrapper.style.cssText = "padding:8px;overflow:auto;";
+    canvasWrapper.appendChild(canvas);
+
+    let currentPage = 1;
+    async function renderPage(pageNum) {
+      const page = await pdf.getPage(pageNum);
+      const initialViewport = page.getViewport({ scale: 1.0 });
+      const availableWidth = Math.max(240, Math.min(600, container.clientWidth || container.getBoundingClientRect().width || 600) - 16);
+      const scale = Math.min(1.0, availableWidth / initialViewport.width);
+      const viewport = page.getViewport({ scale });
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const context = canvas.getContext("2d");
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      pageLabel.textContent = `${pageNum} / ${pdf.numPages}`;
+      prevBtn.disabled = pageNum <= 1;
+      nextBtn.disabled = pageNum >= pdf.numPages;
+    }
+
+    prevBtn.addEventListener("click", async () => {
+      if (currentPage <= 1) return;
+      currentPage -= 1;
+      await renderPage(currentPage);
+    });
+
+    nextBtn.addEventListener("click", async () => {
+      if (currentPage >= pdf.numPages) return;
+      currentPage += 1;
+      await renderPage(currentPage);
+    });
+
+    container.appendChild(header);
+    container.appendChild(canvasWrapper);
+    await renderPage(1);
+  } catch (err) {
+    container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview PDF: ${err.message}</p>`;
+    console.error("PDF preview error:", err);
+  }
+}
+
+async function renderDocxPreview(container, base64Data) {
+  try {
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    let text = "";
+    if (window.mammoth && typeof window.mammoth.convertToHtml === "function") {
+      const result = await window.mammoth.convertToHtml({ arrayBuffer: bytes.buffer });
+      text = result.value || "";
+    } else if (window.docx && window.docx.Document && typeof window.docx.Document.load === "function") {
+      const result = await window.docx.Document.load(bytes);
+      text = result.sections.flatMap(section =>
+        section.children.map(child => {
+          if (child.children) {
+            return child.children.map(c => c.text || "").join(" ");
+          }
+          return child.text || "";
+        })
+      ).join("\n\n");
+    } else {
+      throw new Error("DOCX preview library not loaded");
+    }
+
+    text = text
+      .replace(/\r\n?/g, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\u00A0/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    if (paragraphs.length === 0) {
+      container.innerHTML = `<p style="padding: 8px; color: var(--fg);">No preview content available.</p>`;
+      return;
+    }
+
+    const pageSize = 4;
+    const totalPages = Math.ceil(paragraphs.length / pageSize);
+
+    container.innerHTML = "";
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:8px;color:var(--fg);";
+    const title = document.createElement("span");
+    title.textContent = `DOCX Preview (${totalPages} pages)`;
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;align-items:center;gap:8px;";
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.textContent = "←";
+    prevBtn.style.cssText = "padding:4px 10px;border-radius:4px;font-size:14px;";
+    const pageLabel = document.createElement("span");
+    pageLabel.style.cssText = "font-size:12px;";
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.textContent = "→";
+    nextBtn.style.cssText = "padding:4px 10px;border-radius:4px;font-size:14px;";
+    controls.appendChild(prevBtn);
+    controls.appendChild(pageLabel);
+    controls.appendChild(nextBtn);
+    header.appendChild(title);
+    header.appendChild(controls);
+
+    const content = document.createElement("div");
+    content.style.cssText = "padding:8px;color:var(--fg);font-size:12px;line-height:1.5;white-space:normal;word-break:break-word;overflow:auto;max-height:400px;max-width:100%;";
+
+    let currentPage = 1;
+    function renderPage(pageNum) {
+      const start = (pageNum - 1) * pageSize;
+      const pageText = paragraphs.slice(start, start + pageSize);
+      content.innerHTML = "";
+      pageText.forEach((paragraph) => {
+        const p = document.createElement("p");
+        p.style.cssText = "margin:0 0 1em;font-size:12px;line-height:1.5;";
+        paragraph.split("\n").forEach((line, index) => {
+          if (index > 0) {
+            p.appendChild(document.createElement("br"));
+          }
+          p.appendChild(document.createTextNode(line));
+        });
+        content.appendChild(p);
+      });
+      pageLabel.textContent = `${pageNum} / ${totalPages}`;
+      prevBtn.disabled = pageNum <= 1;
+      nextBtn.disabled = pageNum >= totalPages;
+    }
+
+    prevBtn.addEventListener("click", () => {
+      if (currentPage <= 1) return;
+      currentPage -= 1;
+      renderPage(currentPage);
+    });
+    nextBtn.addEventListener("click", () => {
+      if (currentPage >= totalPages) return;
+      currentPage += 1;
+      renderPage(currentPage);
+    });
+
+    container.appendChild(header);
+    container.appendChild(content);
+    renderPage(1);
+  } catch (err) {
+    container.innerHTML = `<p style="padding: 8px; color: red;">Failed to preview DOCX: ${err.message}</p>`;
+    console.error("DOCX preview error:", err);
+  }
+}
+
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
 function renderSingleMessage(message) {
   if (!message || !message.user) return;
   const u = message.user;
@@ -527,6 +854,7 @@ function renderSingleMessage(message) {
   if (message.contentType === "text") return renderText(u.username, v, u.color, t, grouped, senderId);
   if (message.contentType === "image") return renderImage(u.username, v.mime || "image/jpeg", v.base64Data || "", u.color, t, grouped, senderId);
   if (message.contentType === "file") return renderFile(u.username, v.filename || "file.txt", v.content || "", v.language || "", u.color, t, grouped, senderId);
+  if (message.contentType === "document") return renderDocument(u.username, v.filename || "document", v.doctype || "pdf", v.base64Data || "", u.color, t, grouped, senderId);
 }
 
 function renderMessages() {
@@ -600,6 +928,20 @@ function normalizeIncomingMessage(dj) {
         filename: dj.filename,
         content: dj.content,
         language: typeof dj.language === "string" ? dj.language : ""
+      },
+      user,
+      timestamp
+    };
+  }
+
+  if (dj.event === "document") {
+    if (typeof dj.data !== "string" || typeof dj.filename !== "string" || typeof dj.doctype !== "string") return null;
+    return {
+      contentType: "document",
+      value: {
+        filename: dj.filename,
+        doctype: dj.doctype,
+        base64Data: dj.data
       },
       user,
       timestamp
@@ -687,6 +1029,10 @@ socket.addEventListener("message", (event) => {
       queueIncomingMessage(normalizeIncomingMessage(dj));
       return;
     }
+    case "document": {
+      queueIncomingMessage(normalizeIncomingMessage(dj));
+      return;
+    }
     case "typing": {
       users_typing.push(dj.id);
       update_typing_span();
@@ -756,6 +1102,107 @@ async function send_text_file(file) {
   }
 }
 
+async function send_document(file) {
+  const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+  
+  if (ext === '.pdf') {
+    await send_pdf(file);
+  } else if (ext === '.docx') {
+    await send_docx(file);
+  } else if (ext === '.pptx') {
+    await send_pptx_as_pdf(file);
+  } else {
+    reportChatError("invalid document format", `file type ${ext} not supported`);
+  }
+}
+
+async function send_pdf(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    if (!safeSendWs("&d" + JSON.stringify({ filename: file.name, doctype: "pdf" }), "failed to start PDF upload")) {
+      return;
+    }
+    safeSendWs(new Uint8Array(arrayBuffer), "failed to send PDF bytes");
+  } catch (err) {
+    reportChatError("failed to send PDF", err);
+  }
+}
+
+async function send_docx(file) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    if (!safeSendWs("&d" + JSON.stringify({ filename: file.name, doctype: "docx" }), "failed to start DOCX upload")) {
+      return;
+    }
+    safeSendWs(new Uint8Array(arrayBuffer), "failed to send DOCX bytes");
+  } catch (err) {
+    reportChatError("failed to send DOCX", err);
+  }
+}
+
+function convertPptxToPdfLocally(file, progress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/convert-pptx", true);
+    xhr.responseType = "blob";
+    xhr.setRequestHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+    xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      const percent = 5 + Math.round((event.loaded / event.total) * 35);
+      progress.setProgress(percent, `Uploading ${file.name} for local conversion...`);
+    });
+
+    xhr.addEventListener("readystatechange", () => {
+      if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED) {
+        progress.setIndeterminate(`Converting ${file.name} to PDF locally...`);
+      }
+    });
+
+    xhr.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      const percent = 75 + Math.round((event.loaded / event.total) * 20);
+      progress.setProgress(percent, `Downloading converted PDF...`);
+    });
+
+    xhr.addEventListener("load", async () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const message = await xhr.response.text().catch(() => "");
+        reject(new Error(message || `conversion failed (${xhr.status})`));
+        return;
+      }
+
+      const headerName = xhr.getResponseHeader("X-Converted-Filename");
+      const pdfName = headerName ? decodeURIComponent(headerName) : file.name.replace(/\.pptx$/i, ".pdf");
+      resolve(new File([xhr.response], pdfName, { type: "application/pdf" }));
+    });
+
+    xhr.addEventListener("error", () => reject(new Error("local conversion request failed")));
+    xhr.addEventListener("abort", () => reject(new Error("local conversion request aborted")));
+    xhr.send(file);
+  });
+}
+
+async function send_pptx_as_pdf(file) {
+  const progress = createUploadProgressMessage(file.name);
+
+  try {
+    if (file.size > pptxConversionMaxBytes) {
+      throw new Error(`file is too large for local conversion (max ${Math.floor(pptxConversionMaxBytes / (1024 * 1024))} MB)`);
+    }
+
+    progress.setProgress(2, `Preparing ${file.name}...`);
+    const pdfFile = await convertPptxToPdfLocally(file, progress);
+    progress.setProgress(96, `Sending ${pdfFile.name} to chat...`);
+    await send_pdf(pdfFile);
+    progress.complete(`Sent ${pdfFile.name}`);
+  } catch (err) {
+    progress.fail("PPTX conversion failed");
+    reportChatError("failed to convert PPTX locally", err);
+  }
+}
+
 function bindFilePicker(button, picker, onPick) {
   if (!button || !picker) return;
 
@@ -785,7 +1232,16 @@ if (sendPhotoBtn && photoInput) {
   });
 }
 
-bindFilePicker(sendFileBtn, fileInput, send_text_file);
+async function send_file_handler(file) {
+  const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+  if (['.pdf', '.docx', '.pptx'].includes(ext)) {
+    await send_document(file);
+  } else {
+    await send_text_file(file);
+  }
+}
+
+bindFilePicker(sendFileBtn, fileInput, send_file_handler);
 
 if (msgBox && imageOverlay && overlayImg) {
   msgBox.addEventListener("click", (event) => {

@@ -1,4 +1,4 @@
-TARGET := main
+TARGET := bin/svr
 SRC := svr/main.cpp
 
 ifeq ($(OS),Windows_NT)

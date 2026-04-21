@@ -23,7 +23,7 @@
    <span id="us-typing">Typing: </span>
    <input id="msg-input" autofocus onkeypress="if (event.charCode != 38 && event.charCode != 124){send(event)} else return false;"></input>
    <input id="photo-input" type="file" accept="image/*" style="display:none;">
-   <input id="file-input" type="file" accept=".txt,.md,.json,.js,.ts,.tsx,.jsx,.html,.css,.c,.cc,.cpp,.cxx,.h,.hpp,.py,.java,.rs,.go,.sh,.xml,.yml,.yaml,.toml,.ini,.csv,.log" style="display:none;">
+   <input id="file-input" type="file" accept=".txt,.md,.json,.js,.ts,.tsx,.jsx,.html,.css,.c,.cc,.cpp,.cxx,.h,.hpp,.py,.java,.rs,.go,.sh,.xml,.yml,.yaml,.toml,.ini,.csv,.log,.pdf,.pptx,.docx" style="display:none;">
    </div>
    <input type="checkbox" checked="true" onchange="soundEnabled = this.checked">sound</input>
    <button id="send-photo-btn" type="button">Send Photo</button>
@@ -35,6 +35,18 @@
      <img id="overlay-img" alt="Expanded chat image">
    </div>
    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+   <script>
+     if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+       window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+     }
+   </script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.16/mammoth.browser.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/docx@8.11.3"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+   <script src="./jszip-loadasync-shim.js"></script>
+   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-clike.min.js"></script>
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-c.min.js"></script>
@@ -54,6 +66,6 @@
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-css.min.js"></script>
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-yaml.min.js"></script>
    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-toml.min.js"></script>
-   <script src="script.js?v=54"></script>
+   <script src="script.js?v=55"></script>
  </body>
 </html>
