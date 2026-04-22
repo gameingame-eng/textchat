@@ -37,4 +37,5 @@ credit:
  - https://github.com/yhirose/cpp-httplib (server)
  - https://github.com/nlohmann/json (server-side json)
  - https://favicon.io (favicon)
-link is chat.waffledogz.us
+link is here <a href=chat.waffledogz.us>here</a>
+
